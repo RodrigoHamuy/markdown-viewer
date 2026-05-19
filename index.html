@@ -64,7 +64,7 @@
             }
 
             // Initialize markdown-it
-            var md = window.markdownit();
+            var md = window.markdownit({ html: true });
 
             document.getElementById('content').innerHTML = md.render(markdownText);
 
