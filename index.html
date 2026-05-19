@@ -62,15 +62,25 @@
             if (!markdownText) {
                 markdownText = await (await fetch("README.md")).text();
             }
-    
+
             // Initialize markdown-it
             var md = window.markdownit();
 
-            // Render the Markdown text
-            var result = md.render(markdownText);
+            document.getElementById('content').innerHTML = md.render(markdownText);
 
-            // Insert the rendered HTML into the page
-            document.getElementById('content').innerHTML = result;
+            document.addEventListener('paste', function (e) {
+                var pasted = (e.clipboardData || window.clipboardData).getData('text');
+                if (pasted) {
+                    e.preventDefault();
+                    var compressed = pako.deflate(pasted);
+                    var binary = '';
+                    for (var i = 0; i < compressed.length; i++) {
+                        binary += String.fromCharCode(compressed[i]);
+                    }
+                    var encoded = window.btoa(binary);
+                    window.location.search = '?mdz=' + encodeURIComponent(encoded);
+                }
+            });
         })();
     </script>
 </body>
