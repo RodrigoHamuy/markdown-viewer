@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none';">
     <title>Markdown Viewer</title>
     <style>
         :root {
@@ -56,6 +57,34 @@
             padding: 0.4em 0.8em;
         }
         #content hr { border: 0; border-top: 1px solid var(--border); }
+        #content img { max-width: 100%; height: auto; }
+        #loader {
+            max-width: 800px;
+            margin: 1.5em auto;
+            text-align: center;
+            display: none;
+        }
+        body.show-loader #loader { display: block; }
+        #loader label { display: block; cursor: pointer; }
+        #loader svg { width: 100%; max-width: 600px; display: block; margin: 1em auto; }
+        #md-file-input {
+            position: absolute;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+        #paste-button {
+            font: inherit;
+            padding: 0.6em 1.2em;
+            border: 1px solid currentColor;
+            border-radius: 8px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            opacity: 0.85;
+            margin: 1em auto;
+        }
         #source {
             display: none;
             max-width: 800px;
@@ -130,6 +159,26 @@
 </head>
 <body>
     <div id="content"></div>
+    <div id="loader">
+        <label for="md-file-input" aria-label="Load a .md file, or paste with Ctrl+V">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 220" role="img" aria-hidden="true">
+                <rect x="10" y="10" width="580" height="200" rx="14" ry="14"
+                      fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-dasharray="10 8" opacity="0.55"/>
+                <g transform="translate(255 50)" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
+                    <path d="M12 4 h44 l24 24 v54 a6 6 0 0 1 -6 6 h-62 a6 6 0 0 1 -6 -6 v-72 a6 6 0 0 1 6 -6 z"/>
+                    <path d="M56 4 v24 h24"/>
+                    <text x="45" y="60" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="14" font-weight="700" stroke="none" fill="currentColor">.md</text>
+                </g>
+                <text x="300" y="170" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="600" fill="currentColor" opacity="0.85">Load a .md file</text>
+                <text x="300" y="198" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" fill="currentColor" opacity="0.65">or paste with Ctrl+V / Cmd+V</text>
+            </svg>
+        </label>
+        <input id="md-file-input" type="file" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain">
+        <div>
+            <button id="paste-button" type="button">Paste from clipboard</button>
+        </div>
+    </div>
     <pre id="source"></pre>
     <div id="drop-overlay"><span>Drop .md file to view</span></div>
     <button id="source-toggle" type="button" aria-pressed="false" aria-label="Toggle source" title="Toggle source">
@@ -140,8 +189,8 @@
     </button>
 
     <!-- Include markdown-it from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js" integrity="sha384-tzkLtoItq5nn9rQVHE/dKGZmMnvCdc62hJPgq7WotRHBFtSXJeRB6DU3zKSV6bDy" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js" integrity="sha384-rFdKZvJHVkXdRK5NQFw9YO3T5x4gtLbxubseK6D7U+IOGZBqlKtXCt7i5yUzWw58" crossorigin="anonymous"></script>
     <script>
         // Function to get URL parameter
         function getUrlParameter(name) {
@@ -195,12 +244,87 @@
 
             if (!markdownText) {
                 markdownText = await (await fetch("README.md")).text();
+                document.body.classList.add('show-loader');
             }
 
-            // Initialize markdown-it
-            var md = window.markdownit({ html: true });
+            // Initialize markdown-it with raw HTML disabled.
+            // With html:false there's no HTML-injection surface from the markdown
+            // source itself, so no post-render sanitizer is needed.
+            var md = window.markdownit({ html: false, linkify: true, breaks: false });
 
-            document.getElementById('content').innerHTML = md.render(markdownText);
+            // Restrict link schemes (defense in depth — markdown-it already blocks
+            // javascript:/vbscript:/data: by default, but be explicit).
+            var SAFE_LINK = /^(https?:|mailto:|tel:|#|\/|\.\/|\.\.\/)/i;
+            var defaultValidateLink = md.validateLink;
+            md.validateLink = function (url) {
+                return SAFE_LINK.test(String(url).trim()) && defaultValidateLink.call(md, url);
+            };
+
+            // Render SVG as <img src="data:image/svg+xml;base64,...">. Browsers
+            // disable script execution and external resource loading inside SVG
+            // loaded as an <img>, so even an SVG with <script> or onload="..."
+            // is inert. Two entry points:
+            //   1. A custom block rule that matches raw <svg>...</svg> blocks
+            //      in the markdown source (so users can keep writing inline SVG
+            //      even with html:false).
+            //   2. A ```svg fenced code block, useful when the SVG has weird
+            //      indentation or you want to be explicit.
+            function svgToDataUri(svg) {
+                var bytes = new TextEncoder().encode(svg);
+                var binary = '';
+                for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                return 'data:image/svg+xml;base64,' + window.btoa(binary);
+            }
+            function escapeAttr(s) {
+                return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            }
+
+            md.block.ruler.before('paragraph', 'svg_block', function svgBlock(state, startLine, endLine, silent) {
+                // Skip indented code blocks (4+ space indent).
+                if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+                var pos = state.bMarks[startLine] + state.tShift[startLine];
+                var max = state.eMarks[startLine];
+                if (!/^<svg(?:[\s>]|$)/i.test(state.src.slice(pos, max))) return false;
+
+                // Find the line containing the closing </svg>.
+                var endLineFound = -1;
+                var endIdx = -1;
+                for (var line = startLine; line < endLine; line++) {
+                    var lineStart = state.bMarks[line];
+                    var lineEnd = state.eMarks[line];
+                    var m = state.src.slice(lineStart, lineEnd).match(/<\/svg\s*>/i);
+                    if (m) {
+                        endLineFound = line;
+                        endIdx = lineStart + m.index + m[0].length;
+                        break;
+                    }
+                }
+                if (endLineFound === -1) return false;
+                if (silent) return true;
+
+                var token = state.push('svg_block', '', 0);
+                token.content = state.src.slice(pos, endIdx);
+                token.map = [startLine, endLineFound + 1];
+                state.line = endLineFound + 1;
+                return true;
+            }, { alt: ['paragraph', 'blockquote', 'list'] });
+
+            md.renderer.rules.svg_block = function (tokens, idx) {
+                return '<p><img alt="svg" src="' + escapeAttr(svgToDataUri(tokens[idx].content)) + '"></p>\n';
+            };
+
+            var defaultFence = md.renderer.rules.fence;
+            md.renderer.rules.fence = function (tokens, idx, options, env, self) {
+                var token = tokens[idx];
+                var info = (token.info || '').trim().toLowerCase();
+                if (info === 'svg') {
+                    return '<img alt="svg" src="' + escapeAttr(svgToDataUri(token.content)) + '">';
+                }
+                return defaultFence(tokens, idx, options, env, self);
+            };
+
+            var contentEl = document.getElementById('content');
+            contentEl.innerHTML = md.render(markdownText);
             var sourceEl = document.getElementById('source');
             sourceEl.textContent = markdownText;
 
