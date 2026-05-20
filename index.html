@@ -75,23 +75,39 @@
             position: fixed;
             bottom: 16px;
             left: 16px;
-            padding: 8px 12px;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
             background: var(--bg);
-            color: var(--fg);
+            color: var(--muted);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 0.85em;
+            border-radius: 50%;
             cursor: pointer;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        #source-toggle:hover { background: var(--code-bg); }
+        #source-toggle svg { width: 18px; height: 18px; display: block; }
+        body.show-source #source-toggle { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+        @media (hover: hover) {
+            #source-toggle:hover { background: var(--code-bg); color: var(--fg); }
+        }
+        @media (hover: none) {
+            #source-toggle { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+            body.show-source #source-toggle { background: var(--bg); color: var(--fg); border-color: var(--border); }
+        }
     </style>
 </head>
 <body>
     <div id="content"></div>
     <pre id="source"></pre>
-    <button id="source-toggle" type="button" aria-pressed="false">View source</button>
+    <button id="source-toggle" type="button" aria-pressed="false" aria-label="Toggle source" title="Toggle source">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+    </button>
 
     <!-- Include markdown-it from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
@@ -160,7 +176,6 @@
             var toggle = document.getElementById('source-toggle');
             toggle.addEventListener('click', function () {
                 var showing = document.body.classList.toggle('show-source');
-                toggle.textContent = showing ? 'View rendered' : 'View source';
                 toggle.setAttribute('aria-pressed', showing ? 'true' : 'false');
             });
 
