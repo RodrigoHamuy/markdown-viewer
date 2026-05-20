@@ -69,6 +69,14 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
             font-size: 0.9em;
         }
+        #source code.hljs {
+            background: transparent;
+            padding: 0;
+            display: block;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
         body.show-source #content { display: none; }
         body.show-source #source { display: block; }
         #source-toggle {
@@ -171,12 +179,55 @@
             var md = window.markdownit({ html: true });
 
             document.getElementById('content').innerHTML = md.render(markdownText);
-            document.getElementById('source').textContent = markdownText;
+            var sourceEl = document.getElementById('source');
+            sourceEl.textContent = markdownText;
+
+            var hljsLoading;
+            function loadHljs() {
+                if (hljsLoading) return hljsLoading;
+                hljsLoading = new Promise(function (resolve, reject) {
+                    var lightLink = document.createElement('link');
+                    lightLink.rel = 'stylesheet';
+                    lightLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+                    lightLink.media = '(prefers-color-scheme: light)';
+                    document.head.appendChild(lightLink);
+
+                    var darkLink = document.createElement('link');
+                    darkLink.rel = 'stylesheet';
+                    darkLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
+                    darkLink.media = '(prefers-color-scheme: dark)';
+                    document.head.appendChild(darkLink);
+
+                    var script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
+                    script.onload = function () {
+                        var md2 = document.createElement('script');
+                        md2.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js';
+                        md2.onload = resolve;
+                        md2.onerror = reject;
+                        document.head.appendChild(md2);
+                    };
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+                return hljsLoading;
+            }
+
+            var highlighted = false;
+            function highlightSource() {
+                if (highlighted || !window.hljs) return;
+                var result = window.hljs.highlight(markdownText, { language: 'markdown' });
+                sourceEl.innerHTML = '<code class="hljs language-markdown">' + result.value + '</code>';
+                highlighted = true;
+            }
 
             var toggle = document.getElementById('source-toggle');
             toggle.addEventListener('click', function () {
                 var showing = document.body.classList.toggle('show-source');
                 toggle.setAttribute('aria-pressed', showing ? 'true' : 'false');
+                if (showing && !highlighted) {
+                    loadHljs().then(highlightSource).catch(function () {});
+                }
             });
 
             document.addEventListener('paste', function (e) {
