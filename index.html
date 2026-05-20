@@ -105,11 +105,33 @@
             #source-toggle { background: var(--fg); color: var(--bg); border-color: var(--fg); }
             body.show-source #source-toggle { background: var(--bg); color: var(--fg); border-color: var(--border); }
         }
+        #drop-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+            color: #ffffff;
+            font-size: 1.4em;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        #drop-overlay::before {
+            content: "";
+            position: absolute;
+            inset: 24px;
+            border: 3px dashed rgba(255, 255, 255, 0.85);
+            border-radius: 12px;
+        }
+        body.dragging #drop-overlay { display: flex; }
     </style>
 </head>
 <body>
     <div id="content"></div>
     <pre id="source"></pre>
+    <div id="drop-overlay"><span>Drop .md file to view</span></div>
     <button id="source-toggle" type="button" aria-pressed="false" aria-label="Toggle source" title="Toggle source">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="16 18 22 12 16 6"></polyline>
@@ -234,10 +256,73 @@
                 var pasted = (e.clipboardData || window.clipboardData).getData('text');
                 if (pasted) {
                     e.preventDefault();
-                    var compressed = pako.deflate(pasted, { level: 9 });
-                    var encoded = uint8ArrayToBase64Url(compressed);
-                    window.location.search = '?mdz=' + encoded;
+                    loadMarkdown(pasted);
                 }
+            });
+
+            function loadMarkdown(text) {
+                var compressed = pako.deflate(text, { level: 9 });
+                var encoded = uint8ArrayToBase64Url(compressed);
+                window.location.search = '?mdz=' + encoded;
+            }
+
+            function hasFiles(e) {
+                return e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') !== -1;
+            }
+
+            var dragDepth = 0;
+            window.addEventListener('dragenter', function (e) {
+                if (!hasFiles(e)) return;
+                dragDepth++;
+                document.body.classList.add('dragging');
+            });
+            window.addEventListener('dragleave', function (e) {
+                if (!hasFiles(e)) return;
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (dragDepth === 0) document.body.classList.remove('dragging');
+            });
+            window.addEventListener('dragover', function (e) {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            function readFile(file) {
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function () {
+                    loadMarkdown(String(reader.result));
+                };
+                reader.readAsText(file);
+            }
+
+            window.addEventListener('drop', function (e) {
+                dragDepth = 0;
+                document.body.classList.remove('dragging');
+                var files = e.dataTransfer && e.dataTransfer.files;
+                if (!files || !files.length) return;
+                var file = files[0];
+                if (!/\.(md|markdown|mdown|mkd|txt)$/i.test(file.name) && file.type && file.type.indexOf('text') === -1) return;
+                e.preventDefault();
+                readFile(file);
+            });
+
+            document.addEventListener('change', function (e) {
+                if (e.target && e.target.id === 'md-file-input') {
+                    readFile(e.target.files && e.target.files[0]);
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!e.target || e.target.id !== 'paste-button') return;
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    alert('Clipboard access is not available in this browser. Use Ctrl+V / Cmd+V instead.');
+                    return;
+                }
+                navigator.clipboard.readText().then(function (text) {
+                    if (text) loadMarkdown(text);
+                }).catch(function () {
+                    alert('Could not read clipboard. Use Ctrl+V / Cmd+V instead.');
+                });
             });
         })();
     </script>
