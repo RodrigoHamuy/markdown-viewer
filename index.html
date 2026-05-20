@@ -56,10 +56,42 @@
             padding: 0.4em 0.8em;
         }
         #content hr { border: 0; border-top: 1px solid var(--border); }
+        #source {
+            display: none;
+            max-width: 800px;
+            margin: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            background: var(--code-bg);
+            border-radius: 4px;
+            padding: 0.8em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.9em;
+        }
+        body.show-source #content { display: none; }
+        body.show-source #source { display: block; }
+        #source-toggle {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            padding: 8px 12px;
+            background: var(--bg);
+            color: var(--fg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85em;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        #source-toggle:hover { background: var(--code-bg); }
     </style>
 </head>
 <body>
     <div id="content"></div>
+    <pre id="source"></pre>
+    <button id="source-toggle" type="button" aria-pressed="false">View source</button>
 
     <!-- Include markdown-it from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
@@ -123,6 +155,14 @@
             var md = window.markdownit({ html: true });
 
             document.getElementById('content').innerHTML = md.render(markdownText);
+            document.getElementById('source').textContent = markdownText;
+
+            var toggle = document.getElementById('source-toggle');
+            toggle.addEventListener('click', function () {
+                var showing = document.body.classList.toggle('show-source');
+                toggle.textContent = showing ? 'View rendered' : 'View source';
+                toggle.setAttribute('aria-pressed', showing ? 'true' : 'false');
+            });
 
             document.addEventListener('paste', function (e) {
                 var pasted = (e.clipboardData || window.clipboardData).getData('text');
