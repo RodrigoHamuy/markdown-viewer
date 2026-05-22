@@ -168,6 +168,19 @@
             border-radius: 12px;
         }
         body.dragging #drop-overlay { display: flex; }
+        #footer {
+            max-width: 800px;
+            margin: 3em auto 1em;
+            padding-top: 1em;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.9em;
+            color: var(--muted);
+            display: none;
+        }
+        #footer a { color: var(--link); text-decoration: none; }
+        #footer a:hover { text-decoration: underline; }
+        body.has-content #footer { display: block; }
     </style>
 </head>
 <body>
@@ -193,6 +206,9 @@
         </div>
     </div>
     <pre id="source"></pre>
+    <footer id="footer">
+        Rendered with <a href="./">markdown-viewer</a>
+    </footer>
     <div id="drop-overlay"><span>Drop .md file to view</span></div>
     <button id="source-toggle" type="button" aria-pressed="false" aria-label="Toggle source" title="Toggle source">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -258,6 +274,8 @@
             if (!markdownText) {
                 markdownText = await (await fetch("README.md")).text();
                 document.body.classList.add('show-loader');
+            } else {
+                document.body.classList.add('has-content');
             }
 
             // Initialize markdown-it with raw HTML disabled.
