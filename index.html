@@ -57,7 +57,12 @@
             margin: 0;
             padding: 0 1em;
         }
-        #content table { border-collapse: collapse; }
+        #content table {
+            border-collapse: collapse;
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+        }
         #content th,
         #content td {
             border: 1px solid var(--border);
