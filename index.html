@@ -401,6 +401,19 @@
                 highlighted = true;
             }
 
+            // Highlight fenced code blocks in the rendered output. highlight.js
+            // is only fetched when the document actually contains a fence with
+            // a language tag. Unknown languages are left as plain text.
+            var codeBlocks = contentEl.querySelectorAll('pre > code[class*="language-"]');
+            if (codeBlocks.length) {
+                loadHljs().then(function () {
+                    codeBlocks.forEach(function (el) {
+                        var m = el.className.match(/language-(\S+)/);
+                        if (m && window.hljs.getLanguage(m[1])) window.hljs.highlightElement(el);
+                    });
+                }).catch(function () {});
+            }
+
             var toggle = document.getElementById('source-toggle');
             toggle.addEventListener('click', function () {
                 var showing = document.body.classList.toggle('show-source');
