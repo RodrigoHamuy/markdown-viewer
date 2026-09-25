@@ -74,6 +74,17 @@
         }
         #content hr { border: 0; border-top: 1px solid var(--border); }
         #content img { max-width: 100%; height: auto; }
+        #content .task-list-item {
+            list-style: none;
+        }
+        #content .task-list-item-checkbox {
+            width: 1.05em;
+            height: 1.05em;
+            margin: 0 0.45em 0 -1.5em;
+            vertical-align: -0.12em;
+            accent-color: var(--link);
+            cursor: pointer;
+        }
         #loader {
             max-width: 800px;
             margin: 1.5em auto;
@@ -285,6 +296,34 @@
             // With html:false there's no HTML-injection surface from the markdown
             // source itself, so no post-render sanitizer is needed.
             var md = window.markdownit({ html: false, linkify: true, breaks: false });
+
+            // Add GitHub-style task lists without enabling arbitrary HTML.
+            // Turns "- [ ] task" and "- [x] task" into real checkboxes.
+            md.core.ruler.after('inline', 'task_lists', function (state) {
+                state.tokens.forEach(function (token, index) {
+                    if (token.type !== 'inline' || index < 2) return;
+                    if (state.tokens[index - 1].type !== 'paragraph_open') return;
+
+                    var listItem = state.tokens[index - 2];
+                    if (listItem.type !== 'list_item_open') return;
+                    if (!token.children || !token.children.length || token.children[0].type !== 'text') return;
+
+                    var match = token.children[0].content.match(/^\[([ xX])\]\s+/);
+                    if (!match) return;
+
+                    token.children[0].content = token.children[0].content.slice(match[0].length);
+                    var checkbox = new state.Token('task_checkbox', 'input', 0);
+                    checkbox.meta = { checked: match[1].toLowerCase() === 'x' };
+                    token.children.unshift(checkbox);
+                    listItem.attrJoin('class', 'task-list-item');
+                });
+            });
+
+            md.renderer.rules.task_checkbox = function (tokens, idx) {
+                var checked = tokens[idx].meta && tokens[idx].meta.checked;
+                return '<input class="task-list-item-checkbox" type="checkbox"' +
+                    (checked ? ' checked' : '') + ' aria-label="Task complete">';
+            };
 
             // Restrict link schemes (defense in depth — markdown-it already blocks
             // javascript:/vbscript:/data: by default, but be explicit).
